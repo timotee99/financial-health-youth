@@ -1,432 +1,509 @@
-import { Component, signal, computed } from '@angular/core';
+import { Component } from '@angular/core';
 import { Router } from '@angular/router';
 import { MoneyMikeComponent } from '../../components/money-mike/money-mike';
 import { LessonCompleteComponent } from '../../components/lesson-complete/lesson-complete';
-import { XpBarComponent } from '../../components/xp-bar/xp-bar';
 import { FinancialProfileService } from '../../services/financial-profile.service';
 import { AudioService } from '../../services/audio.service';
-import { JobOpportunity } from '../../interfaces/lesson.interface';
+import { EarnCapstoneComponent } from './earn-capstone';
+
+interface Problem {
+  emoji: string;
+  problem: string;
+  solution: string;
+  correctHelp: string;
+}
+
+interface MapJob {
+  id: string;
+  emoji: string;
+  name: string;
+  effort: string;
+  pay: number;
+  desc: string;
+}
+
+interface Business {
+  id: string;
+  name: string;
+  emoji: string;
+  baseCustomers: number;
+}
+
+interface BizChoice {
+  label: string;
+  effect: string;
+}
+
+type Phase =
+  | 'intro' | 'map' | 'effort' | 'business'
+  | 'choices' | 'capstone' | 'personality' | 'complete';
 
 @Component({
   selector: 'app-earn-money',
   standalone: true,
-  imports: [MoneyMikeComponent, LessonCompleteComponent, XpBarComponent],
+  imports: [MoneyMikeComponent, LessonCompleteComponent, EarnCapstoneComponent],
   template: `
     <div class="page-container">
-      @if (!started) {
+      @if (phase === 'intro') {
         <div class="intro animate-slide-up">
-          <app-money-mike message="Money doesn't grow on trees! You earn it by helping others and solving problems. Let me show you how!" mood="happy">
+          <app-money-mike message="Money does not just appear — it comes from helping people and solving problems!" mood="happy">
           </app-money-mike>
 
           <div class="lesson-content card">
-            <h2>💡 How Do People Earn Money?</h2>
-            <p>People earn money by providing value to others. When you help someone solve a problem or do something they can't do themselves, they pay you for your help!</p>
+            <div class="big-idea">
+              <span class="bi-emoji">💡</span>
+              <p><strong>Money Comes From Helping People.</strong> People earn money when they solve problems or help others.</p>
+            </div>
           </div>
 
-          <div class="lesson-content card">
-            <h2>🔑 The Secret Formula</h2>
-            <div class="formula-row">
-              <div class="formula-step">
-                <span class="step-num">1</span>
-                <span class="step-text">Find a problem</span>
+          <div class="problem-solver">
+            <h2>🧩 Job = Problem Solver</h2>
+            <p>Each character has a problem. How can Money Mike help?</p>
+
+            @if (problemIndex < problems.length) {
+              <div class="problem-card">
+                <span class="pc-problem">{{ currentProblem.emoji }} {{ currentProblem.problem }}</span>
+                <div class="pc-choices">
+                  <button class="pc-choice" (click)="answerProblem(0)">
+                    {{ currentProblem.correctHelp }}
+                  </button>
+                  <button class="pc-choice wrong" (click)="answerProblem(1)">
+                    {{ currentProblem.solution }}
+                  </button>
+                </div>
+                @if (problemAnswered) {
+                  <div class="pc-feedback" [class.good]="problemCorrect">
+                    {{ problemCorrect ? '✅ Correct! Money Mike earns by solving their problem!' : '❌ Not quite! Think about what they actually need help with.' }}
+                  </div>
+                }
+                @if (problemAnswered) {
+                  <button class="btn-secondary" (click)="nextProblem()">
+                    {{ problemIndex >= problems.length - 1 ? 'Done' : 'Next ➡️' }}
+                  </button>
+                }
               </div>
-              <span class="formula-arrow">➡️</span>
-              <div class="formula-step">
-                <span class="step-num">2</span>
-                <span class="step-text">Offer to help</span>
+            } @else {
+              <div class="problem-done">
+                <p>🎉 Great! You understand that earning money is about helping and solving problems!</p>
+                <button class="btn-primary" (click)="goTo('map')">🗺️ Explore the Neighborhood!</button>
               </div>
-              <span class="formula-arrow">➡️</span>
-              <div class="formula-step">
-                <span class="step-num">3</span>
-                <span class="step-text">Get paid!</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="lesson-content card">
-            <h2>💰 Ways Kids Can Earn Money</h2>
-            <div class="earn-ideas-grid">
-              <div class="earn-idea"><span class="ei-icon">🐕</span><span>Dog Walking</span></div>
-              <div class="earn-idea"><span class="ei-icon">🌿</span><span>Yard Work</span></div>
-              <div class="earn-idea"><span class="ei-icon">🍋</span><span>Lemonade Stand</span></div>
-              <div class="earn-idea"><span class="ei-icon">🧹</span><span>Cleaning</span></div>
-              <div class="earn-idea"><span class="ei-icon">📚</span><span>Tutoring</span></div>
-              <div class="earn-idea"><span class="ei-icon">👶</span><span>Babysitting</span></div>
-              <div class="earn-idea"><span class="ei-icon">🎨</span><span>Sell Art</span></div>
-              <div class="earn-idea"><span class="ei-icon">♻️</span><span>Recycle</span></div>
-            </div>
-          </div>
-
-          <div class="lesson-content card key-points">
-            <h2>Remember This</h2>
-            <div class="rule-box">
-              <span class="rule-icon">💪</span>
-              <p><strong>The more value you provide, the more you can earn.</strong> Think about what skills you have and how you can help others!</p>
-            </div>
-            <div class="rule-box">
-              <span class="rule-icon">🌟</span>
-              <p><strong>Always do your best work.</strong> Happy customers will recommend you to others!</p>
-            </div>
-            <div class="rule-box">
-              <span class="rule-icon">🛡️</span>
-              <p><strong>Safety first!</strong> Always check with your parents before starting any job, and never talk to strangers alone.</p>
-            </div>
-          </div>
-
-          <div class="ready-section">
-            <button class="btn-primary" (click)="startGame()" aria-label="Explore jobs in the city">
-              🗺️ Explore the City!
-            </button>
+            }
           </div>
         </div>
       }
 
-      @if (started && !showSummary && !showComplete) {
-        <div class="game-area">
-          <app-xp-bar [currentXp]="0" [maxXp]="200" [level]="1"></app-xp-bar>
-
-          <div class="wallet-display" aria-live="polite">
-            <span class="wallet-icon">👛</span>
-            <span class="wallet-label">Your Wallet:</span>
-            <span class="wallet-amount">{{ '$' + totalEarned }}</span>
-            <span class="wallet-target">Goal: $20</span>
-          </div>
-
-          <app-money-mike message="Click on a job to learn more. Choose jobs to earn $20!" mood="thinking">
+      @if (phase === 'map') {
+        <div class="phase-container animate-slide-up">
+          <app-money-mike message="Welcome to the neighborhood! Pick 3 jobs to earn $20!" mood="happy" size="small">
           </app-money-mike>
 
-          <div class="city-map" role="region" aria-label="Interactive city map with job opportunities">
-            @for (job of jobs; track job.id) {
-              <button class="job-card" [class.selected]="selectedJobs().includes(job.id)"
-                      [class.disabled]="totalEarned >= 20"
-                      (click)="selectJob(job)" [disabled]="totalEarned >= 20"
-                      [attr.aria-label]="job.title + ': Earn $' + job.earnings">
-                <div class="job-emoji">{{ job.emoji }}</div>
-                <div class="job-info">
-                  <h3>{{ job.title }}</h3>
-                  <p class="job-problem">{{ job.problem }}</p>
-                  <p class="job-work">💪 {{ job.work }}</p>
-                </div>
-                <div class="job-earnings">
-                  <span class="earn-icon">💰</span>
-                  <span class="earn-amount">{{ '+$' + job.earnings }}</span>
-                </div>
-                @if (selectedJobs().includes(job.id)) {
-                  <div class="check-mark">✅</div>
-                }
+          <div class="phase-header">
+            <span class="ph-number">1 / 5</span>
+            <h2>🗺️ Neighborhood Map</h2>
+          </div>
+
+          <div class="map-earned">Earned: {{ '$' + mapTotal }}</div>
+
+          <div class="map-grid">
+            @for (job of mapJobs; track job.id) {
+              <button class="map-job" [class.picked]="mapPicked.includes(job.id)"
+                      [class.disabled]="mapPicked.length >= 3 && !mapPicked.includes(job.id)"
+                      (click)="pickMapJob(job)"
+                      [disabled]="mapPicked.length >= 3 && !mapPicked.includes(job.id)">
+                <span class="mj-emoji">{{ job.emoji }}</span>
+                <span class="mj-name">{{ job.name }}</span>
+                <span class="mj-pay">{{ '$' + job.pay }}</span>
+                <span class="mj-effort">{{ job.effort }}</span>
+                <span class="mj-desc">{{ job.desc }}</span>
               </button>
             }
           </div>
 
-          @if (totalEarned >= 20) {
-            <div class="goal-reached animate-pop">
-              <span class="goal-emoji">🎯</span>
-              <p>Goal reached! You earned {{ '$' + totalEarned }}!</p>
-              <button class="btn-primary" (click)="finishWork()" aria-label="Finish and see summary">
-                ✅ Finish Working
-              </button>
+          @if (mapPicked.length === 3) {
+            <div class="map-result">
+              <p>You chose: {{ pickedJobNames }}</p>
+              <p>You earned <strong>{{ '$' + mapTotal }}</strong>! Easy jobs pay less, harder jobs pay more.</p>
+              <button class="btn-primary" (click)="confirmMap()">Continue ➡️</button>
             </div>
           }
         </div>
       }
 
-      @if (showSummary) {
-        <div class="summary animate-slide-up">
-          <h2>💼 Your Earning Adventure</h2>
+      @if (phase === 'effort') {
+        <div class="phase-container animate-slide-up">
+          <app-money-mike message="More effort often means more money! Let's climb the earning ladder." mood="thinking" size="small">
+          </app-money-mike>
 
-          <app-money-mike [message]="summaryMessage" mood="celebrate"></app-money-mike>
-
-          <div class="wallet-growth">
-            <div class="wallet-before">$0</div>
-            <div class="growth-arrow">➡️</div>
-            <div class="wallet-after">{{ '$' + totalEarned }}</div>
+          <div class="phase-header">
+            <span class="ph-number">2 / 5</span>
+            <h2>🪜 Effort vs Reward Ladder</h2>
           </div>
 
-          <div class="jobs-completed card">
-            <h3>📋 Jobs You Did</h3>
-            @for (jobId of selectedJobs(); track jobId) {
-              <div class="job-result">
-                <span>{{ getJob(jobId)?.emoji }}</span>
-                <span>{{ getJob(jobId)?.title }} - {{ '$' + (getJob(jobId)?.earnings ?? 0) }}</span>
+          <div class="ladder-game">
+            <p class="lg-intro">Climb the ladder by choosing jobs. The higher you go, the more you earn — but it takes more effort!</p>
+
+            <div class="ladder-visual">
+              @for (rung of ladder; track rung.level; let i = $index) {
+                <div class="ladder-rung" [class.active]="i <= ladderPosition" [class.current]="i === ladderPosition">
+                  <span class="lr-emoji">{{ rung.emoji }}</span>
+                  <span class="lr-name">{{ rung.name }}</span>
+                  <span class="lr-effort">{{ rung.effortLabel }}</span>
+                  <span class="lr-pay">{{ '$' + rung.pay }}</span>
+                  <span class="lr-time">{{ rung.time }}</span>
+                </div>
+              }
+            </div>
+
+            @if (ladderPosition < ladder.length - 1) {
+              <button class="bk-btn save" (click)="climbLadder()">
+                ⏫ Try harder job ({{ '$' + ladder[ladderPosition + 1].pay }})
+              </button>
+              <button class="bk-btn spend" (click)="takeEasyJob()">
+                ⏬ Stick with easy job ({{ '$' + ladder[ladderPosition].pay }})
+              </button>
+            }
+
+            @if (ladderPosition >= ladder.length - 1 || ladderDone) {
+              <div class="ladder-result">
+                <p>You earned <strong>{{ '$' + ladderTotal }}</strong> by climbing the ladder!</p>
+                <p>{{ ladderLesson }}</p>
+                <button class="btn-primary" (click)="confirmLadder()">Continue ➡️</button>
               </div>
             }
-            <div class="total-row">
-              <span>Total Earned:</span>
-              <span class="total-amount">{{ '$' + totalEarned }}</span>
-            </div>
+          </div>
+        </div>
+      }
+
+      @if (phase === 'business') {
+        <div class="phase-container animate-slide-up">
+          <app-money-mike message="Want to be an entrepreneur? Let's start a business!" mood="happy" size="small">
+          </app-money-mike>
+
+          <div class="phase-header">
+            <span class="ph-number">3 / 5</span>
+            <h2>🏪 Entrepreneur Mode</h2>
           </div>
 
-          <div class="lesson-learned card">
-            <h3>💡 What We Learned</h3>
-            <p>Money is earned by helping others! When you solve problems for people, they pay you for your help.</p>
-            <p>Ideas for earning money:</p>
-            <ul>
-              <li>Help neighbors with yard work</li>
-              <li>Walk dogs or pet sit</li>
-              <li>Set up a lemonade stand</li>
-              <li>Help with cleaning or organizing</li>
-              <li>Babysit younger children</li>
-            </ul>
+          <div class="biz-game">
+            @if (!bizStarted) {
+              <p class="biz-intro">Pick a business to start!</p>
+              <div class="biz-pick">
+                @for (b of businesses; track b.id) {
+                  <button class="biz-choice" (click)="pickBusiness(b)">
+                    <span class="bzc-emoji">{{ b.emoji }}</span>
+                    <span class="bzc-name">{{ b.name }}</span>
+                  </button>
+                }
+              </div>
+            }
+
+            @if (bizStarted && !bizDone) {
+              <div class="biz-active">
+                <div class="biz-header">
+                  <span class="bizh-emoji">{{ currentBiz?.emoji }}</span>
+                  <h3>{{ currentBiz?.name }}</h3>
+                </div>
+
+                <div class="biz-question">
+                  <p>What price per item?</p>
+                  <div class="biz-slider-row">
+                    <button class="adj-btn" (click)="adjustBizPrice(-0.5)">−</button>
+                    <span class="biz-price-val">{{ '$' + bizPrice.toFixed(1) }}</span>
+                    <button class="adj-btn" (click)="adjustBizPrice(0.5)">+</button>
+                  </div>
+                </div>
+
+                <div class="biz-question">
+                  <p>How much effort?</p>
+                  <div class="biz-slider-row">
+                    <button class="adj-btn" (click)="adjustBizEffort(-1)">−</button>
+                    <span class="biz-price-val">{{ bizEffortLabel }}</span>
+                    <button class="adj-btn" (click)="adjustBizEffort(1)">+</button>
+                  </div>
+                </div>
+
+                <button class="btn-primary" (click)="runBusiness()">🚀 Run My Business!</button>
+              </div>
+            }
+
+            @if (bizDone) {
+              <div class="biz-result">
+                <div class="biz-r-header">
+                  <span class="bizh-emoji">{{ currentBiz?.emoji }}</span>
+                  <h3>{{ currentBiz?.name }} — Results!</h3>
+                </div>
+                <div class="biz-metrics">
+                  <div class="biz-metric"><span>Price</span><span>{{ '$' + bizPrice.toFixed(1) }}</span></div>
+                  <div class="biz-metric"><span>Customers</span><span>{{ bizCustomers }}</span></div>
+                  <div class="biz-metric"><span>Total Revenue</span><span>{{ '$' + bizRevenue }}</span></div>
+                  <div class="biz-metric"><span>Customer Rating</span><span>{{ bizRating }}/5 ⭐</span></div>
+                </div>
+                <p class="biz-lesson">{{ bizLesson }}</p>
+                <button class="btn-primary" (click)="confirmBusiness()">Continue ➡️</button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (phase === 'choices') {
+        <div class="phase-container animate-slide-up">
+          <app-money-mike message="You have limited time! Choose your jobs wisely!" mood="thinking" size="small">
+          </app-money-mike>
+
+          <div class="phase-header">
+            <span class="ph-number">4 / 5</span>
+            <h2>⏰ Opportunity Choice</h2>
           </div>
 
-          <button class="btn-primary" (click)="finishLesson()" aria-label="Complete lesson">
-            🎉 Complete Lesson
-          </button>
+          <div class="opp-game">
+            <p class="opp-intro">You have <strong>1 hour</strong>. Which job do you take?</p>
+
+            @if (oppIndex < opportunities.length) {
+              <div class="opp-card">
+                <span class="opp-emoji">{{ currentOpp.emoji }}</span>
+                <h3>{{ currentOpp.title }}</h3>
+                <p>{{ currentOpp.desc }}</p>
+                <div class="opp-choices">
+                  @for (c of currentOpp.choices; track $index) {
+                    <button class="opp-btn" (click)="pickOpp($index)">
+                      <span>{{ c.emoji }}</span>
+                      <span>{{ c.label }}</span>
+                      <span>{{ '$' + c.amount }}</span>
+                    </button>
+                  }
+                </div>
+                @if (oppChosen) {
+                  <div class="opp-feedback">{{ currentOpp.feedback }}</div>
+                }
+                @if (oppChosen) {
+                  <button class="btn-secondary" (click)="nextOpp()">
+                    {{ oppIndex >= opportunities.length - 1 ? 'Done' : 'Next ➡️' }}
+                  </button>
+                }
+              </div>
+            } @else {
+              <div class="opp-done">
+                <p>You earned <strong>{{ '$' + oppTotal }}</strong> by choosing your opportunities wisely!</p>
+                <button class="btn-primary" (click)="goTo('capstone')">🚀 Start Capstone Challenge!</button>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      @if (phase === 'capstone') {
+        <div class="phase-container">
+          <app-money-mike message="Now for the big challenge! Earn your dream goal in 10 days!" mood="happy" size="small">
+          </app-money-mike>
+          <div class="phase-header">
+            <span class="ph-number">5 / 5</span>
+            <h2>🎯 Earn Your Dream Goal</h2>
+          </div>
+          <app-earn-capstone (done)="onCapstoneDone()" (result)="capResult = $event"></app-earn-capstone>
+        </div>
+      }
+
+      @if (phase === 'personality') {
+        <div class="personality-page animate-slide-up">
+          <app-money-mike [message]="personalityMessage" mood="celebrate" size="small"></app-money-mike>
+
+          <div class="personality-card">
+            <span class="pc-emoji">{{ personalityEmoji }}</span>
+            <h2>{{ personalityName }}</h2>
+            <p>{{ personalityDescription }}</p>
+          </div>
+
+          <div class="personality-stats">
+            <h3>📊 Your Earning Results</h3>
+            @if (capResult) {
+              <div class="pstat-row"><span>Total Earned</span><span>{{ '$' + capResult.earned }}</span></div>
+              <div class="pstat-row"><span>Saved for Goal</span><span>{{ '$' + capResult.saved }}</span></div>
+              <div class="pstat-row"><span>Jobs Completed</span><span>{{ capResult.totalJobs }}</span></div>
+              <div class="pstat-row"><span>Hard Jobs Chosen</span><span>{{ capResult.highEffortJobs }}</span></div>
+              <div class="pstat-row"><span>Goal Reached?</span><span>{{ capResult.reachedGoal ? '🎉 Yes' : '💪 Close!' }}</span></div>
+            }
+          </div>
+
+          <div class="real-world card">
+            <h3>🌍 Real-World Connection</h3>
+            <p>All jobs — from doctor to teacher to engineer — solve problems and help people.</p>
+            <p>What problems would YOU like to solve when you grow up?</p>
+          </div>
+
+          <div class="final-lesson card">
+            <h3>📖 What You Learned</h3>
+            <p>✅ Money comes from helping people and solving problems</p>
+            <p>✅ More effort often means more reward</p>
+            <p>✅ Being an entrepreneur means creating value for others</p>
+            <p>✅ Skills and quality work lead to more opportunities</p>
+            <p>✅ Earning is the first step — what you do next matters too</p>
+          </div>
+
+          <button class="btn-primary" (click)="finishLesson()">🎉 Complete Lesson</button>
         </div>
       }
     </div>
 
-    @if (showComplete) {
+    @if (phase === 'complete') {
       <app-lesson-complete lessonTitle="Earn Money"
-        [message]="completeMsg"
-        [xpEarned]="100" [score]="totalEarned * 2"
-        badge="Young Entrepreneur" badgeEmoji="💼"
+        [message]="'Incredible! You learned that money comes from helping people and solving problems. You earned the Earn Star badge!'"
+        [xpEarned]="100" [score]="finalScore"
+        badge="Earn Star" badgeEmoji="⭐"
         (continue)="goHome()">
       </app-lesson-complete>
     }
   `,
   styles: [`
     .intro { padding: 10px 0; }
-    .lesson-content {
-      margin-bottom: 16px;
-      text-align: left;
-    }
-    .lesson-content h2 {
-      font-family: 'Fredoka', sans-serif;
-      font-size: 21px;
-      margin-bottom: 8px;
-    }
-    .lesson-content > p {
-      font-family: 'Nunito', sans-serif;
-      font-size: 15px;
-      color: #555;
-      line-height: 1.6;
-      margin-bottom: 10px;
-    }
-    .formula-row {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 10px 0;
-    }
-    .formula-step {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-    }
-    .step-num {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      height: 36px;
-      background: #4CAF50;
-      color: white;
-      border-radius: 50%;
-      font-family: 'Fredoka', sans-serif;
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .step-text {
-      font-family: 'Nunito', sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-      color: #555;
-    }
-    .formula-arrow { font-size: 20px; color: #FFD54F; }
-    .earn-ideas-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .earn-idea {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: #E8F5E9;
-      border-radius: 12px;
-      padding: 8px 12px;
-      font-family: 'Nunito', sans-serif;
-      font-size: 13px;
-      font-weight: 600;
-      color: #2E7D32;
-    }
-    .ei-icon { font-size: 18px; }
-    .key-points { background: #FFF8E1; }
-    .rule-box {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 10px 0;
-      border-bottom: 1px solid #FFE082;
-    }
-    .rule-box:last-child { border-bottom: none; }
-    .rule-icon { font-size: 24px; flex-shrink: 0; }
-    .rule-box p { margin: 0; font-size: 14px; line-height: 1.5; }
-    .ready-section { text-align: center; padding: 12px 0; }
+    .lesson-content { margin-bottom: 16px; text-align: left; }
+    .lesson-content h2 { font-family: 'Fredoka', sans-serif; font-size: 21px; margin-bottom: 8px; }
+    .lesson-content > p { font-family: 'Nunito', sans-serif; font-size: 15px; color: #555; line-height: 1.6; margin-bottom: 10px; }
+    .big-idea { display: flex; align-items: center; gap: 12px; background: linear-gradient(135deg, #E8F5E9, #C8E6C9); border-radius: 16px; padding: 16px; }
+    .bi-emoji { font-size: 32px; }
+    .big-idea p { font-family: 'Nunito', sans-serif; font-size: 16px; line-height: 1.5; margin: 0; }
+    .problem-solver { margin: 16px 0; }
+    .problem-solver h2 { font-family: 'Fredoka', sans-serif; font-size: 20px; margin-bottom: 4px; }
+    .problem-solver > p { font-family: 'Nunito', sans-serif; font-size: 14px; color: #888; margin-bottom: 12px; }
+    .problem-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; }
+    .pc-problem { font-family: 'Fredoka', sans-serif; font-size: 20px; display: block; margin-bottom: 16px; }
+    .pc-choices { display: flex; flex-direction: column; gap: 8px; }
+    .pc-choice { padding: 12px 16px; border-radius: 12px; border: 3px solid #4CAF50; background: #E8F5E9; cursor: pointer; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+    .pc-choice.wrong { border-color: #E0E0E0; background: white; }
+    .pc-choice:hover { transform: translateY(-2px); }
+    .pc-feedback { margin-top: 12px; padding: 10px; border-radius: 10px; font-family: 'Nunito', sans-serif; font-size: 14px; }
+    .pc-feedback.good { background: #E8F5E9; }
+    .pc-feedback:not(.good) { background: #FFF3E0; }
+    .problem-done { text-align: center; }
+    .phase-nav { text-align: center; padding: 20px 0; }
+    .phase-container { padding: 10px 0; }
+    .phase-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+    .ph-number { background: #FFD54F; border-radius: 20px; padding: 4px 14px; font-family: 'Fredoka', sans-serif; font-size: 14px; font-weight: 700; color: #5D4037; }
+    .phase-header h2 { font-family: 'Fredoka', sans-serif; font-size: 22px; margin: 0; }
+
+    .map-earned { text-align: center; font-family: 'Fredoka', sans-serif; font-size: 24px; font-weight: 700; color: #FF6F00; margin-bottom: 12px; }
+    .map-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 16px; }
+    .map-job { background: white; border: 3px solid #E0E0E0; border-radius: 16px; padding: 14px; cursor: pointer; text-align: center; transition: all 0.2s; }
+    .map-job:hover:not(:disabled) { border-color: #FFD54F; transform: translateY(-2px); }
+    .map-job.picked { border-color: #4CAF50; background: #F1F8E9; }
+    .map-job.disabled { opacity: 0.4; cursor: not-allowed; }
+    .mj-emoji { font-size: 32px; display: block; }
+    .mj-name { font-family: 'Fredoka', sans-serif; font-size: 14px; display: block; }
+    .mj-pay { font-family: 'Fredoka', sans-serif; font-size: 18px; font-weight: 700; color: #FF6F00; display: block; }
+    .mj-effort { font-family: 'Nunito', sans-serif; font-size: 11px; color: #888; display: block; text-transform: capitalize; }
+    .mj-desc { font-family: 'Nunito', sans-serif; font-size: 11px; color: #aaa; display: block; margin-top: 2px; }
+    .map-result { text-align: center; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.6; }
+
+    .ladder-game { max-width: 480px; margin: 0 auto; }
+    .lg-intro { font-family: 'Nunito', sans-serif; font-size: 15px; color: #555; margin-bottom: 16px; }
+    .ladder-visual { margin-bottom: 16px; }
+    .ladder-rung { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 10px; margin-bottom: 6px; background: #F5F5F5; transition: all 0.3s; }
+    .ladder-rung.active { background: #E8F5E9; }
+    .ladder-rung.current { background: #FFF8E1; border: 2px solid #FFD54F; transform: scale(1.02); }
+    .lr-emoji { font-size: 24px; }
+    .lr-name { font-family: 'Fredoka', sans-serif; font-size: 14px; flex: 1; }
+    .lr-effort { font-family: 'Nunito', sans-serif; font-size: 11px; color: #888; }
+    .lr-pay { font-family: 'Fredoka', sans-serif; font-size: 16px; font-weight: 700; color: #FF6F00; min-width: 30px; text-align: right; }
+    .lr-time { font-family: 'Nunito', sans-serif; font-size: 11px; color: #aaa; min-width: 50px; text-align: right; }
+    .bk-btn { display: block; width: 100%; padding: 12px; border-radius: 50px; font-family: 'Fredoka', sans-serif; font-size: 15px; font-weight: 700; border: none; cursor: pointer; margin-bottom: 8px; transition: all 0.2s; }
+    .bk-btn.save { background: linear-gradient(135deg, #4CAF50, #66BB6A); color: white; }
+    .bk-btn.spend { background: linear-gradient(135deg, #2196F3, #42A5F5); color: white; }
+    .bk-btn:hover { transform: translateY(-2px); }
+    .ladder-result { text-align: center; font-family: 'Nunito', sans-serif; font-size: 14px; line-height: 1.6; }
+
+    .biz-game { max-width: 480px; margin: 0 auto; }
+    .biz-intro { text-align: center; font-family: 'Nunito', sans-serif; font-size: 15px; margin-bottom: 12px; }
+    .biz-pick { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+    .biz-choice { padding: 16px 20px; border-radius: 16px; border: 3px solid #E0E0E0; background: white; cursor: pointer; text-align: center; transition: all 0.2s; min-width: 100px; }
+    .biz-choice:hover { border-color: #FFD54F; transform: translateY(-2px); }
+    .bzc-emoji { font-size: 32px; display: block; }
+    .bzc-name { font-family: 'Fredoka', sans-serif; font-size: 14px; display: block; margin-top: 4px; }
+    .biz-header { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .bizh-emoji { font-size: 36px; }
+    .biz-header h3 { font-family: 'Fredoka', sans-serif; font-size: 20px; margin: 0; }
+    .biz-question { margin-bottom: 16px; text-align: center; }
+    .biz-question p { font-family: 'Nunito', sans-serif; font-size: 14px; color: #555; margin-bottom: 8px; }
+    .biz-slider-row { display: flex; align-items: center; gap: 12px; justify-content: center; }
+    .adj-btn { width: 40px; height: 40px; border-radius: 50%; border: none; font-size: 20px; font-weight: 700; cursor: pointer; background: #FFF3E0; color: #E65100; }
+    .biz-price-val { font-family: 'Fredoka', sans-serif; font-size: 22px; font-weight: 700; color: #333; min-width: 70px; text-align: center; }
+    .biz-result { text-align: center; }
+    .biz-metrics { background: white; border-radius: 14px; padding: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin: 12px 0; }
+    .biz-metric { display: flex; justify-content: space-between; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 600; padding: 6px 0; border-bottom: 1px solid #F0F0F0; }
+    .biz-metric:last-child { border-bottom: none; }
+    .biz-lesson { font-family: 'Nunito', sans-serif; font-size: 14px; color: #888; font-style: italic; }
+
+    .opp-game { max-width: 480px; margin: 0 auto; }
+    .opp-intro { text-align: center; font-family: 'Nunito', sans-serif; font-size: 15px; margin-bottom: 16px; }
+    .opp-card { background: white; border-radius: 24px; padding: 24px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+    .opp-emoji { font-size: 48px; display: block; }
+    .opp-card h3 { font-family: 'Fredoka', sans-serif; font-size: 18px; margin: 4px 0; }
+    .opp-card > p { font-family: 'Nunito', sans-serif; font-size: 14px; color: #555; margin: 6px 0 16px; }
+    .opp-choices { display: flex; flex-direction: column; gap: 8px; }
+    .opp-btn { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: 12px; border: 2px solid #E0E0E0; background: white; cursor: pointer; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+    .opp-btn:hover { border-color: #FFD54F; }
+    .opp-btn span:last-child { margin-left: auto; color: #FF6F00; }
+    .opp-btn span:first-child { font-size: 22px; }
+    .opp-feedback { margin-top: 12px; padding: 10px 14px; border-radius: 10px; background: #E8F5E9; font-family: 'Nunito', sans-serif; font-size: 14px; }
+    .opp-done { text-align: center; font-family: 'Nunito', sans-serif; font-size: 15px; }
+
+    .personality-page { padding: 10px 0; text-align: center; }
+    .personality-card { background: linear-gradient(135deg, #FFF3E0, #FFE0B2); border-radius: 24px; padding: 28px; margin: 16px 0; }
+    .pc-emoji { font-size: 64px; display: block; margin-bottom: 8px; }
+    .personality-card h2 { font-family: 'Fredoka', sans-serif; font-size: 28px; color: #E65100; margin: 0; }
+    .personality-card p { font-family: 'Nunito', sans-serif; font-size: 15px; color: #555; line-height: 1.6; margin: 8px 0 0; }
+    .personality-stats { background: white; border-radius: 16px; padding: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); margin: 16px 0; text-align: left; }
+    .personality-stats h3 { font-family: 'Fredoka', sans-serif; font-size: 18px; margin-bottom: 10px; }
+    .pstat-row { display: flex; justify-content: space-between; font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 600; padding: 6px 0; border-bottom: 1px solid #F0F0F0; }
+    .pstat-row:last-child { border-bottom: none; }
+    .real-world { text-align: left; }
+    .real-world h3 { margin-bottom: 8px; }
+    .real-world p { font-size: 14px; margin-bottom: 6px; }
+    .final-lesson { text-align: left; }
+    .final-lesson h3 { margin-bottom: 8px; }
+    .final-lesson p { font-size: 14px; margin-bottom: 6px; padding-left: 4px; }
     @media (max-width: 480px) {
-      .formula-row { flex-direction: column; }
-      .earn-ideas-grid { grid-template-columns: repeat(2, 1fr); }
+      .map-grid { grid-template-columns: repeat(2, 1fr); }
     }
-    .game-area { padding: 10px 0; }
-    .wallet-display {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
-      border-radius: 16px;
-      padding: 14px 20px;
-      margin: 12px 0;
-    }
-    .wallet-icon { font-size: 28px; }
-    .wallet-label { font-family: 'Nunito', sans-serif; font-size: 15px; font-weight: 600; color: #2E7D32; }
-    .wallet-amount { font-family: 'Fredoka', sans-serif; font-size: 26px; font-weight: 700; color: #1B5E20; }
-    .wallet-target { font-family: 'Nunito', sans-serif; font-size: 13px; font-weight: 600; color: #888; margin-left: 8px; }
-    .city-map { display: flex; flex-direction: column; gap: 12px; margin: 12px 0; }
-    .job-card {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      background: white;
-      border-radius: 16px;
-      padding: 16px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 3px solid transparent;
-      text-align: left;
-      width: 100%;
-      font-family: inherit;
-      position: relative;
-    }
-    .job-card:hover:not(:disabled) {
-      transform: translateX(4px);
-      border-color: #FFD54F;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
-    }
-    .job-card.selected {
-      border-color: #4CAF50;
-      background: #F1F8E9;
-    }
-    .job-card.disabled {
-      opacity: 0.5;
-      cursor: default;
-    }
-    .job-emoji { font-size: 40px; flex-shrink: 0; width: 50px; text-align: center; }
-    .job-info { flex: 1; }
-    .job-info h3 {
-      font-family: 'Fredoka', sans-serif;
-      font-size: 18px;
-      color: #333;
-      margin: 0;
-    }
-    .job-problem {
-      font-family: 'Nunito', sans-serif;
-      font-size: 13px;
-      color: #888;
-      margin: 2px 0;
-    }
-    .job-work {
-      font-family: 'Nunito', sans-serif;
-      font-size: 14px;
-      color: #555;
-      font-weight: 600;
-      margin: 2px 0 0;
-    }
-    .job-earnings {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      flex-shrink: 0;
-    }
-    .earn-icon { font-size: 20px; }
-    .earn-amount {
-      font-family: 'Fredoka', sans-serif;
-      font-size: 16px;
-      font-weight: 700;
-      color: #4CAF50;
-    }
-    .check-mark {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      font-size: 20px;
-    }
-    .goal-reached {
-      text-align: center;
-      background: linear-gradient(135deg, #E8F5E9, #C8E6C9);
-      border-radius: 20px;
-      padding: 24px;
-      margin: 16px 0;
-    }
-    .goal-emoji { font-size: 48px; display: block; margin-bottom: 8px; }
-    .goal-reached p { font-family: 'Fredoka', sans-serif; font-size: 20px; color: #2E7D32; margin-bottom: 12px; }
-    .summary { text-align: center; padding: 20px 0; }
-    .wallet-growth {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      margin: 16px 0;
-    }
-    .wallet-before, .wallet-after {
-      font-family: 'Fredoka', sans-serif;
-      font-size: 28px;
-      font-weight: 700;
-      padding: 12px 24px;
-      border-radius: 12px;
-    }
-    .wallet-before { background: #F5F5F5; color: #999; }
-    .wallet-after { background: linear-gradient(135deg, #FFD54F, #FFB300); color: #5D4037; }
-    .growth-arrow { font-size: 24px; }
-    .jobs-completed { text-align: left; }
-    .jobs-completed h3 { margin-bottom: 8px; }
-    .job-result {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 4px 0;
-      font-family: 'Nunito', sans-serif;
-      font-size: 14px;
-      color: #555;
-    }
-    .total-row {
-      display: flex;
-      justify-content: space-between;
-      padding-top: 8px;
-      margin-top: 8px;
-      border-top: 2px solid #E8E8E8;
-      font-family: 'Fredoka', sans-serif;
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .total-amount { color: #4CAF50; }
-    .lesson-learned { text-align: left; }
-    .lesson-learned h3 { margin-bottom: 8px; }
-    .lesson-learned p { margin-bottom: 6px; font-size: 14px; }
-    .lesson-learned ul { margin-left: 20px; }
-    .lesson-learned li { font-family: 'Nunito', sans-serif; font-size: 14px; color: #555; margin: 4px 0; }
   `]
 })
 export class EarnMoneyComponent {
-  protected started = false;
-  protected showSummary = false;
-  protected showComplete = false;
+  protected phase: Phase = 'intro';
 
-  protected selectedJobs = signal<string[]>([]);
-  protected totalEarned = 0;
+  // Problem solver state
+  protected problemIndex = 0;
+  protected problemAnswered = false;
+  protected problemCorrect = false;
 
-  jobs: JobOpportunity[] = [
-    { id: 'dog', title: 'Dog Walking', emoji: '🐕', problem: 'Mrs. Smith hurt her ankle and can\'t walk her dog, Max.', work: 'Walk Max for 30 minutes every day after school', earnings: 5 },
-    { id: 'yard', title: 'Yard Work', emoji: '🌿', problem: 'Mr. Johnson\'s yard is overgrown with weeds.', work: 'Pull weeds and water the garden', earnings: 7 },
-    { id: 'lemonade', title: 'Lemonade Stand', emoji: '🍋', problem: 'It\'s a hot summer day and people are thirsty!', work: 'Set up a stand and sell lemonade to neighbors', earnings: 6 },
-    { id: 'garage', title: 'Garage Cleanup', emoji: '🏠', problem: 'The Garcia family\'s garage is too cluttered to park their car.', work: 'Help organize boxes, sweep, and sort items', earnings: 8 },
-    { id: 'babysit', title: 'Babysitting Helper', emoji: '👶', problem: 'Ms. Lee needs help watching her 6-year-old twins for 2 hours.', work: 'Play games, read stories, and make snacks', earnings: 6 },
-  ];
+  // Map state
+  protected mapPicked: string[] = [];
+  protected mapTotal = 0;
+
+  // Ladder state
+  protected ladderPosition = 0;
+  protected ladderTotal = 0;
+  protected ladderDone = false;
+
+  // Business state
+  protected bizStarted = false;
+  protected bizDone = false;
+  protected currentBiz: Business | null = null;
+  protected bizPrice = 2;
+  protected bizEffort = 2;
+  protected bizCustomers = 0;
+  protected bizRevenue = 0;
+  protected bizRating = 3;
+
+  // Opportunity state
+  protected oppIndex = 0;
+  protected oppChosen = false;
+  protected oppTotal = 0;
+
+  // Capstone result
+  protected capResult: {
+    saved: number; spent: number; earned: number;
+    totalJobs: number; highEffortJobs: number;
+    reachedGoal: boolean; goalCost: number;
+  } | null = null;
 
   constructor(
     private router: Router,
@@ -434,49 +511,247 @@ export class EarnMoneyComponent {
     private audio: AudioService
   ) {}
 
-  get summaryMessage(): string {
-    if (this.totalEarned >= 25) return 'Wow! You earned way more than your goal! You\'re a natural entrepreneur! 🌟';
-    return 'Great job helping your community! You earned money while making people happy! 👏';
+  protected problems: Problem[] = [
+    { emoji: '🐶', problem: 'Dog is lonely and needs a walk', solution: 'Buy the dog a new toy', correctHelp: 'Walk the dog and play with it' },
+    { emoji: '🌿', problem: 'Yard is messy with leaves everywhere', solution: 'Wait for the wind to blow them away', correctHelp: 'Rake the leaves and clean the yard' },
+    { emoji: '🧺', problem: 'Laundry is piled up and needs sorting', solution: 'Leave it for tomorrow', correctHelp: 'Fold and organize the laundry' },
+    { emoji: '📚', problem: 'Younger kid needs help with math homework', solution: 'Do the homework for them', correctHelp: 'Tutor them and explain the answers' },
+    { emoji: '🍋', problem: 'Neighbors are hot and want something cold', solution: 'Tell them to turn on the AC', correctHelp: 'Set up a lemonade stand and sell them cups' },
+  ];
+
+  protected mapJobs: MapJob[] = [
+    { id: 'dog', emoji: '🐕', name: 'Walk Dog', effort: 'easy', pay: 5, desc: '15 min walk' },
+    { id: 'yard', emoji: '🌿', name: 'Rake Leaves', effort: 'medium', pay: 8, desc: '30 min work' },
+    { id: 'car', emoji: '🧽', name: 'Wash Car', effort: 'medium', pay: 10, desc: '45 min wash' },
+    { id: 'bake', emoji: '🍪', name: 'Bake Sale', effort: 'hard', pay: 12, desc: '1 hour bake' },
+    { id: 'lemonade', emoji: '🍋', name: 'Lemonade Stand', effort: 'hard', pay: 15, desc: '2 hours' },
+    { id: 'tutor', emoji: '📚', name: 'Tutoring', effort: 'hard', pay: 12, desc: '1 hour help' },
+  ];
+
+  protected ladder = [
+    { level: 1, name: 'Pick Up Toys', emoji: '🧸', effortLabel: 'Very Easy', pay: 2, time: '5 min' },
+    { level: 2, name: 'Walk Dog', emoji: '🐕', effortLabel: 'Easy', pay: 5, time: '15 min' },
+    { level: 3, name: 'Wash Car', emoji: '🧽', effortLabel: 'Medium', pay: 8, time: '30 min' },
+    { level: 4, name: 'Mow Lawn', emoji: '🌿', effortLabel: 'Hard', pay: 10, time: '45 min' },
+    { level: 5, name: 'Lemonade Stand', emoji: '🍋', effortLabel: 'Very Hard', pay: 15, time: '2 hours' },
+  ];
+
+  protected businesses: Business[] = [
+    { id: 'lemonade', name: 'Lemonade Stand', emoji: '🍋', baseCustomers: 15 },
+    { id: 'dogwalk', name: 'Dog Walking', emoji: '🐕', baseCustomers: 8 },
+    { id: 'carwash', name: 'Car Wash', emoji: '🧽', baseCustomers: 6 },
+    { id: 'bake', name: 'Bake Sale', emoji: '🍪', baseCustomers: 20 },
+  ];
+
+  protected bizEffortLabels = ['Minimal', 'Light', 'Moderate', 'High', 'Very High'];
+
+  protected opportunities = [
+    {
+      emoji: '💵', title: 'Quick Cash or Big Project?',
+      desc: 'You have 1 hour to earn money. What do you choose?',
+      choices: [
+        { emoji: '🐕', label: 'Walk a neighbor\'s dog (easy, quick)', amount: 5 },
+        { emoji: '🌿', label: 'Clean a yard (harder, more pay)', amount: 12 },
+        { emoji: '🤝', label: 'Help elderly neighbor for free', amount: 0 },
+      ],
+      feedback: 'Every choice has a tradeoff! Quick jobs earn less but take less time. Harder jobs pay more. Helping for free builds a good reputation!',
+    },
+    {
+      emoji: '🚨', title: 'Emergency! Need $15 Fast!',
+      desc: 'Money Mike needs $15 for a school trip. He has 2 hours. What should he do?',
+      choices: [
+        { emoji: '🙏', label: 'Ask parents for the money', amount: 0 },
+        { emoji: '🍋', label: 'Run a lemonade stand (2 hours)', amount: 15 },
+        { emoji: '🧹', label: 'Do neighbor chores (1 hour)', amount: 8 },
+      ],
+      feedback: 'Earning is better than just asking! When you earn, you learn skills AND get money. Plus, it feels great to earn it yourself!',
+    },
+    {
+      emoji: '📋', title: 'Build Your Reputation',
+      desc: 'A neighbor offers you a job. If you do well, more jobs will come!',
+      choices: [
+        { emoji: '⭐', label: 'Do an excellent job (extra effort)', amount: 10 },
+        { emoji: '⚡', label: 'Do a quick passable job', amount: 6 },
+        { emoji: '📢', label: 'Refer a friend instead', amount: 3 },
+      ],
+      feedback: 'Doing excellent work means more opportunities later! People remember good service and will recommend you to others.',
+    },
+  ];
+
+  get currentProblem(): Problem {
+    return this.problems[this.problemIndex];
   }
 
-  getJob(id: string): JobOpportunity | undefined {
-    return this.jobs.find((j) => j.id === id);
+  get currentOpp(): typeof this.opportunities[0] {
+    return this.opportunities[this.oppIndex];
   }
 
-  startGame(): void {
-    this.started = true;
+  get pickedJobNames(): string {
+    return this.mapPicked.map((id) => this.mapJobs.find((j) => j.id === id)?.name).join(', ');
+  }
+
+  get bizEffortLabel(): string {
+    return this.bizEffortLabels[this.bizEffort - 1] || 'Moderate';
+  }
+
+  get ladderLesson(): string {
+    if (this.ladderPosition >= 4) return 'You climbed to the top! Hard work really pays off — you earned more by taking on bigger challenges!';
+    if (this.ladderTotal > 20) return 'You did a mix of easy and hard jobs. Finding the right balance is smart!';
+    return 'You chose easier jobs. They pay less, but that is okay — everyone starts somewhere!';
+  }
+
+  get personalityEmoji(): string {
+    const r = this.capResult;
+    if (!r) return '🌟';
+    if (r.highEffortJobs >= 4) return '💪';
+    if (r.totalJobs >= 7) return '📋';
+    if (r.reachedGoal) return '🏆';
+    return '🧠';
+  }
+
+  get personalityName(): string {
+    const r = this.capResult;
+    if (!r) return 'Hard Worker';
+    if (r.highEffortJobs >= 4) return 'Hustler Helper';
+    if (r.totalJobs >= 7) return 'Steady Earner';
+    if (r.reachedGoal) return 'Goal Crusher';
+    return 'Explorer Entrepreneur';
+  }
+
+  get personalityDescription(): string {
+    const r = this.capResult;
+    if (!r) return 'You are learning that earning takes effort and consistency. Keep going!';
+    if (r.highEffortJobs >= 4) return 'You are a Hustler Helper! You look for opportunities and are not afraid of hard work. You know that bigger effort brings bigger rewards.';
+    if (r.totalJobs >= 7) return 'You are a Steady Earner! You consistently complete tasks and keep at it. Reliability is one of the most valuable skills!';
+    if (r.reachedGoal) return 'You are a Goal Crusher! You set a goal and earned your way there. This determination will help you achieve anything!';
+    return 'You are an Explorer Entrepreneur! You try different ways to earn and are not afraid to experiment. Creativity is a superpower!';
+  }
+
+  get personalityMessage(): string {
+    return 'Here is your earning personality! Based on how you chose to earn money during your journey.';
+  }
+
+  get finalScore(): number {
+    const r = this.capResult;
+    if (!r) return 100;
+    return r.earned + (r.highEffortJobs * 5);
+  }
+
+  protected goTo(phase: Phase): void {
+    this.phase = phase;
     this.audio.playClick();
   }
 
-  selectJob(job: JobOpportunity): void {
-    if (this.totalEarned >= 20) return;
-    if (this.selectedJobs().includes(job.id)) return;
+  protected answerProblem(choice: number): void {
+    if (this.problemAnswered) return;
+    this.problemAnswered = true;
+    this.problemCorrect = choice === 0;
+    if (this.problemCorrect) this.audio.playSuccess();
+    else this.audio.playIncorrect();
+  }
 
-    this.selectedJobs.update((prev) => [...prev, job.id]);
-    this.totalEarned += job.earnings;
-    this.profile.recordEarningIdea(job.title);
+  protected nextProblem(): void {
+    this.problemAnswered = false;
+    this.problemIndex++;
+  }
+
+  protected pickMapJob(job: MapJob): void {
+    if (this.mapPicked.includes(job.id)) return;
+    if (this.mapPicked.length >= 3) return;
+    this.mapPicked.push(job.id);
+    this.mapTotal += job.pay;
     this.audio.playCoin();
   }
 
-  get completeMsg(): string {
-    return `You earned $${this.totalEarned} by helping others! That's what being a Young Entrepreneur is all about!`;
+  protected confirmMap(): void {
+    this.audio.playSuccess();
+    this.goTo('effort');
   }
 
-  finishWork(): void {
-    this.showSummary = true;
+  protected climbLadder(): void {
+    this.ladderPosition++;
+    this.ladderTotal += this.ladder[this.ladderPosition].pay;
+    this.audio.playCoin();
+    if (this.ladderPosition >= this.ladder.length - 1) {
+      this.ladderDone = true;
+    }
+  }
+
+  protected takeEasyJob(): void {
+    this.ladderTotal += this.ladder[this.ladderPosition].pay;
+    this.ladderDone = true;
+    this.audio.playClick();
+  }
+
+  protected confirmLadder(): void {
+    this.audio.playSuccess();
+    this.goTo('business');
+  }
+
+  protected pickBusiness(b: Business): void {
+    this.currentBiz = b;
+    this.bizStarted = true;
+    this.audio.playClick();
+  }
+
+  protected adjustBizPrice(delta: number): void {
+    this.bizPrice = Math.max(0.5, Math.min(10, this.bizPrice + delta));
+  }
+
+  protected adjustBizEffort(delta: number): void {
+    this.bizEffort = Math.max(1, Math.min(5, this.bizEffort + delta));
+  }
+
+  protected runBusiness(): void {
+    if (!this.currentBiz) return;
+    const cust = this.currentBiz.baseCustomers + (this.bizEffort * 3) - Math.round(this.bizPrice * 2);
+    this.bizCustomers = Math.max(2, cust);
+    this.bizRevenue = Math.round(this.bizCustomers * this.bizPrice);
+    this.bizRating = Math.min(5, Math.max(1, Math.round((this.bizEffort / 5) * 3 + (this.bizPrice <= 3 ? 2 : this.bizPrice <= 5 ? 1 : 0))));
+    this.bizDone = true;
     this.audio.playSuccess();
   }
 
-  finishLesson(): void {
-    this.profile.addScore(this.totalEarned * 2);
-    this.profile.addXp(100);
-    this.profile.addBadge('Young Entrepreneur');
-    this.profile.completeLesson('earn-money');
-    this.audio.playBadge();
-    this.showComplete = true;
+  get bizLesson(): string {
+    if (this.bizRevenue >= 50) return 'Amazing! Your business did great! Good prices and high effort brought lots of customers and revenue!';
+    if (this.bizRevenue >= 25) return 'Solid start! Your business earned decent money. Try adjusting your price or effort to earn more.';
+    return 'Tough start! Low price or low effort means fewer customers. Raising quality can boost your earnings!';
   }
 
-  goHome(): void {
+  protected confirmBusiness(): void {
+    this.audio.playSuccess();
+    this.goTo('choices');
+  }
+
+  protected pickOpp(choice: number): void {
+    if (this.oppChosen) return;
+    this.oppChosen = true;
+    this.oppTotal += this.opportunities[this.oppIndex].choices[choice].amount;
+    this.audio.playClick();
+  }
+
+  protected nextOpp(): void {
+    this.oppChosen = false;
+    this.oppIndex++;
+  }
+
+  protected onCapstoneDone(): void {
+    this.audio.playSuccess();
+    this.goTo('personality');
+  }
+
+  protected finishLesson(): void {
+    const r = this.capResult;
+    const sc = r ? r.earned + (r.highEffortJobs * 5) : 100;
+    this.profile.addScore(sc);
+    this.profile.addXp(100);
+    this.profile.addBadge('Earn Star');
+    this.profile.completeLesson('earn-money');
+    this.audio.playBadge();
+    this.phase = 'complete';
+  }
+
+  protected goHome(): void {
     this.router.navigate(['/']);
   }
 }
