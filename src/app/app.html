@@ -1,0 +1,21 @@
+<div class="app-shell">
+  <nav class="main-nav" role="navigation" aria-label="Main navigation">
+    <a class="nav-brand" routerLink="/">
+      <span class="brand-icon">💰</span>
+      Money Adventure
+    </a>
+    <div class="nav-links">
+      <button class="nav-btn" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}" aria-label="Home">
+        <span>🏠</span>
+        <span class="nav-label">Home</span>
+      </button>
+      <button class="nav-btn" routerLink="/settings" routerLinkActive="active" aria-label="Settings">
+        <span>⚙️</span>
+        <span class="nav-label">Settings</span>
+      </button>
+    </div>
+  </nav>
+  <main>
+    <router-outlet />
+  </main>
+</div>
